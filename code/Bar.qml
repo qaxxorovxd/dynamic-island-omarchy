@@ -40,11 +40,24 @@ Item {
   // The window is always tall enough to hold the open panel; only the closed
   // pill height is ever reserved from the workspace, so windows tile right up
   // under the island and the panel opens *over* them.
-  readonly property int topMargin: 6
-  readonly property int collapsedHeight: 30
+  //
+  // The gap *below* the pill is not the reserved leftover alone: Hyprland lays
+  // the first tiled window out `general:gaps_out` under the exclusive zone, so
+  // reserving `topMargin` on both sides makes the bottom read a whole gaps_out
+  // heavier than the top. Instead the pill sits `edgeGap` from the screen edge
+  // and the zone reserves only what Hyprland's own gap does not already
+  // provide — top and bottom then measure the same. `Style.gapsOut` is half of
+  // Hyprland's value (the shell halves it for panel-to-edge distance), so it is
+  // doubled back here; the floor keeps the pill off the bezel when gaps are
+  // toggled off entirely.
+  readonly property int windowGap: Style.gapsOut * 2
+  readonly property int edgeGap: Math.max(6, windowGap)
+
+  readonly property int topMargin: edgeGap
+  readonly property int collapsedHeight: 26
   readonly property int expandedWidth: 760
   readonly property int expandedHeight: 440
-  readonly property int reservedHeight: collapsedHeight + topMargin * 2
+  readonly property int reservedHeight: topMargin + collapsedHeight + Math.max(0, edgeGap - windowGap)
   readonly property int windowHeight: expandedHeight + topMargin * 2 + 24
 
   // ---------------------------------------------------------------- state
