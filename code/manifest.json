@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "island.bar",
+  "name": "Dynamic Island",
+  "version": "1.0.0",
+  "author": "qaxxorovxd",
+  "description": "A macOS-style Dynamic Island in place of the status bar: a clock pill that expands into a full panel",
+  "kinds": [
+    "bar"
+  ],
+  "entryPoints": {
+    "bar": "Bar.qml"
+  }
+}
