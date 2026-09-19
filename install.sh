@@ -31,6 +31,19 @@ printf '\nDynamic Island for Omarchy\n\n'
 command -v python3 >/dev/null || die "python3 is required"
 command -v omarchy >/dev/null || die "this does not look like an Omarchy system"
 
+# Bar plugins are a recent addition to the Omarchy shell. On an older one the
+# `bar.id` key below is simply ignored and the stock bar stays up, which is a
+# baffling way to find out — so say it plainly instead.
+SHELL_QML="${OMARCHY_PATH:-/usr/share/omarchy}/shell/shell.qml"
+if [ -f "$SHELL_QML" ] && ! grep -q 'activeBarId' "$SHELL_QML"; then
+  say "warning: this Omarchy shell has no bar-plugin support (no activeBarId)"
+  say "         update Omarchy first, or the stock bar will stay up"
+fi
+
+# The weather card is the only thing that needs the network, and the only
+# thing that degrades rather than fails without it.
+command -v curl >/dev/null || say "note: curl is missing, so the weather card will stay empty"
+
 mkdir -p "$CONFIG_DIR/plugins"
 
 # The shell falls back to the packaged defaults when the user has no file yet.
@@ -56,11 +69,11 @@ fi
 rm -rf "$PLUGIN_DIR"
 mkdir -p "$PLUGIN_DIR"
 cp -r "$SOURCE_DIR/code/." "$PLUGIN_DIR/"
-chmod +x "$PLUGIN_DIR/scripts/collect.sh"
+chmod +x "$PLUGIN_DIR"/scripts/*.sh
 say "installed plugin -> $PLUGIN_DIR"
 
 # --------------------------------------------------------------- shell.json
-python3 - "$SHELL_JSON" "$PLUGIN_ID" <<'PY'
+if python3 - "$SHELL_JSON" "$PLUGIN_ID" <<'PY'
 import json, sys
 
 path, plugin_id = sys.argv[1], sys.argv[2]
@@ -80,7 +93,11 @@ with open(path, "w") as handle:
     json.dump(config, handle, indent=2, sort_keys=True)
     handle.write("\n")
 PY
-say "set bar.id = $PLUGIN_ID in shell.json"
+then
+  say "set bar.id = $PLUGIN_ID in shell.json"
+else
+  die "could not edit $SHELL_JSON — is it valid JSON? nothing else was changed"
+fi
 
 # -------------------------------------------------------------------- blur
 # The island is translucent; without a blur rule for its layer namespace it
@@ -116,21 +133,48 @@ else
   say "could not restart the shell; run: omarchy restart shell"
 fi
 
+# Proof rather than hope. The island is a layer-shell surface with a known
+# namespace, so a new user finds out here — not by staring at an unchanged
+# screen wondering which of the steps above did not take.
+if command -v hyprctl >/dev/null 2>&1; then
+  for _ in 1 2 3 4 5 6 7 8; do
+    if hyprctl layers 2>/dev/null | grep -q 'omarchy-island'; then
+      say "island is up"
+      break
+    fi
+    sleep 0.5
+  done
+  if ! hyprctl layers 2>/dev/null | grep -q 'omarchy-island'; then
+    say "the island did not appear; run 'omarchy restart shell' and check:"
+    say "  quickshell log, or: journalctl --user -u omarchy-shell -n 50"
+  fi
+fi
+
 cat <<'EOF'
 
 Done.
 
-  Click the clock to open the island. Esc, the ✕, a click outside, or a
-  workspace switch closes it.
+  Click the clock to open the island, or the pill on the right for media and
+  audio. Esc, the ✕, a click outside, or a workspace switch closes either.
 
-  In the footer, the speaker and microphone buttons take a left click to mute,
-  a right click for the device picker, and a scroll for volume.
+  The media pill also takes a scroll for volume and a middle click to mute,
+  without opening anything. Inside it are the transport, the seek bar, both
+  volumes, and the output and input device lists.
 
-  It can also be driven without the pointer, which is worth a keybind:
+  In the island's footer, the speaker and microphone buttons take a left click
+  to mute, a right click for the device sheet, and a scroll for volume.
+
+  Both can be driven without the pointer, which is worth a keybind:
       omarchy-shell island toggle
       omarchy-shell island open
       omarchy-shell island close
       omarchy-shell island audio
+      omarchy-shell island media
+      omarchy-shell island mediaOpen
+      omarchy-shell island mediaClose
+
+  The weather card follows Omarchy's own location setting:
+      omarchy-weather-location --set "City name"
 
   To go back to the stock Omarchy bar:
       ./uninstall.sh

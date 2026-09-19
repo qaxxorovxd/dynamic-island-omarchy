@@ -1,6 +1,9 @@
 // The open panel's contents: a header the clock slides into, two rows of
 // cards, and a footer strip carrying the small stateful controls.
 //
+// Media is not here: it lives in its own pill at the right edge of the
+// screen, where it can be reached without opening anything.
+//
 // The clock itself is not here — it belongs to Island.qml, because it is the
 // one element that exists in both states. This layout just leaves it room.
 
@@ -104,7 +107,7 @@ Item {
     readonly property real cellWidth: (width - columnSpacing * (columns - 1)) / columns
     readonly property real cellHeight: 150
 
-    MediaCard    { bar: root.bar; hub: root.hub; width: grid.cellWidth; height: grid.cellHeight }
+    WeatherCard  { bar: root.bar; hub: root.hub; width: grid.cellWidth; height: grid.cellHeight }
     CalendarCard { bar: root.bar; hub: root.hub; width: grid.cellWidth; height: grid.cellHeight }
     AgentsCard   { bar: root.bar; hub: root.hub; width: grid.cellWidth; height: grid.cellHeight }
     SystemCard   { bar: root.bar; hub: root.hub; width: grid.cellWidth; height: grid.cellHeight }

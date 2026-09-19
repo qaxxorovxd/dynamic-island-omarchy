@@ -2,7 +2,9 @@
 //
 // It covers the cards rather than opening a second window: the island already
 // holds a focus grab, and a popup surface would either fight it or need its
-// own. Everything here speaks WirePlumber ids, which is what `wpctl` takes.
+// own. The media pill carries the same two lists in its lower half; this
+// sheet stays because the island's footer is where a hand already is when the
+// output turns out to be wrong.
 
 import QtQuick
 
@@ -80,7 +82,8 @@ Item {
       title: "Output"
       glyph: "\uF028"  // speaker
       devices: hub.sinks
-      onSelected: function (id) { hub.setDefaultSink(id) }
+      defaultNode: hub.defaultSink
+      onSelected: function (node) { hub.makeDefault(node) }
     }
 
     DeviceColumn {
@@ -91,7 +94,8 @@ Item {
       title: "Input"
       glyph: "\uF130"  // microphone
       devices: hub.sources
-      onSelected: function (id) { hub.setDefaultSource(id) }
+      defaultNode: hub.defaultSource
+      onSelected: function (node) { hub.makeDefault(node) }
     }
   }
 }

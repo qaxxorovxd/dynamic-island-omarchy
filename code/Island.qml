@@ -30,7 +30,12 @@ Item {
   implicitWidth: width
   implicitHeight: height
 
-  width: open ? bar.expandedWidth : Math.max(96, collapsedRow.implicitWidth + 26)
+  // A clock is a very short string. Sized to it alone the closed pill came out
+  // narrower than the media pill, which always carries a track title — so the
+  // centre object, the one the whole surface is named after, read as the
+  // smaller of the two. The extra width is the fix; the height stays put.
+  width: open ? bar.expandedWidth
+              : Math.max(96, collapsedRow.implicitWidth + 26) + bar.clockExtraWidth
   height: open ? bar.expandedHeight : bar.collapsedHeight
 
   // 260ms with a gentle overshoot on the way out and none on the way back:

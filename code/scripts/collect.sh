@@ -3,8 +3,8 @@
 # One JSON blob describing the machine, for the Dynamic Island bar plugin.
 #
 # Everything here is read-only and cheap: /proc, a couple of sysfs files, one
-# `systemctl show`, one `ss`, and short-circuited `wpctl` / `nmcli` /
-# `bluetoothctl` calls. Nothing is started, nothing is installed. The island
+# `systemctl show`, one `ss`, and short-circuited `nmcli` / `bluetoothctl`
+# calls. Nothing is started, nothing is installed. The island
 # runs this on a timer only while it is open, plus one slow tick while closed
 # so the collapsed pill can show a failure dot.
 #
@@ -109,16 +109,11 @@ for bl in /sys/class/backlight/*; do
   break
 done
 
-# ---------------------------------------------------------------- services
-audio="$(run 2 wpctl get-volume @DEFAULT_AUDIO_SINK@)"
-audio_src="$(run 2 wpctl get-volume @DEFAULT_AUDIO_SOURCE@)"
-sink_name="$(run 2 wpctl inspect @DEFAULT_AUDIO_SINK@ | sed -n 's/.*node.description = "\(.*\)".*/\1/p' | head -1)"
-source_name="$(run 2 wpctl inspect @DEFAULT_AUDIO_SOURCE@ | sed -n 's/.*node.description = "\(.*\)".*/\1/p' | head -1)"
-# The device list comes from `wpctl status` rather than pactl: its ids are the
-# WirePlumber ids that `wpctl set-default` takes, and it has already filtered
-# out monitor sources, which are never something you want to pick as a mic.
-wp_status="$(run 3 wpctl status)"
-
+# ------------------------------------------------------- network, bluetooth
+#
+# Audio is deliberately absent from this script: the panels read volume, mute
+# and the device lists straight off PipeWire, which pushes changes instead of
+# waiting to be asked. Nothing here needs to shell out to `wpctl`.
 net="$(run 3 nmcli -t -f NAME,TYPE,DEVICE connection show --active)"
 wifi="$(run 3 nmcli -t -f IN-USE,SSID,SIGNAL device wifi list --rescan no | grep '^\*' | head -1)"
 ipaddr="$(run 2 ip -4 -o addr show scope global | awk '{print $2" "$4}' | head -2)"
@@ -150,16 +145,14 @@ for k in d.get("keyboards", []):
 
 python3 - "$states" "$ports" "$meminfo" "$stat1" "$stat2" "$loadavg" "$uptime_s" \
           "$diskline" "$temp" "$bat_pct" "$bat_state" "$bright" "$bright_max" \
-          "$audio" "$audio_src" "$sink_name" "$source_name" "$wp_status" \
           "$net" "$wifi" "$ipaddr" \
           "$bt_power" "$bt_devices" "$updates" "$kbd" "${UNITS[@]}" <<'PY'
 import json, re, sys
 
 (raw_states, raw_ports, raw_mem, stat1, stat2, loadavg, uptime_s, diskline,
- temp, bat_pct, bat_state, bright, bright_max, audio, audio_src, sink_name,
- source_name, wp_status, net, wifi, ipaddr, bt_power, bt_devices, updates,
- kbd) = sys.argv[1:26]
-pairs = sys.argv[26:]
+ temp, bat_pct, bat_state, bright, bright_max, net, wifi, ipaddr, bt_power,
+ bt_devices, updates, kbd) = sys.argv[1:21]
+pairs = sys.argv[21:]
 
 labels = {pairs[i]: pairs[i + 1] for i in range(0, len(pairs) - 1, 2)}
 order = [pairs[i] for i in range(0, len(pairs) - 1, 2)]
@@ -282,52 +275,6 @@ out["battery"] = ({"percent": int(bat_pct), "state": bat_state}
 out["brightness"] = (round(int(bright) / int(bright_max) * 100)
                      if bright.strip().isdigit() and bright_max.strip().isdigit()
                      and int(bright_max) > 0 else None)
-
-# ---------------------------------------------------------------------- audio
-def parse_volume(raw):
-    # `wpctl get-volume` prints e.g. "Volume: 0.65 [MUTED]".
-    match = re.search(r'([0-9]*\.?[0-9]+)', raw)
-    if not match:
-        return None
-    return {"percent": round(float(match.group(1)) * 100),
-            "muted": "MUTED" in raw}
-
-def parse_devices(text):
-    """Pull the Sinks and Sources tables out of `wpctl status`.
-
-    Rows look like:  │  *   59. USB Audio Device Analog Stereo   [vol: 1.00 MUTED]
-    The leading box-drawing characters vary with terminal width, so the row
-    regex anchors on the id rather than on the tree glyphs.
-    """
-    row = re.compile(r"(\*)?\s*(\d+)\.\s+(.*?)\s*\[vol:\s*([\d.]+)([^\]]*)\]")
-    sinks, sources, section = [], [], None
-    for line in text.splitlines():
-        stripped = line.strip("\u2502\u251c\u2514\u2500 \t")
-        if stripped.startswith("Sinks:"):
-            section = sinks; continue
-        if stripped.startswith("Sources:"):
-            section = sources; continue
-        # Any other heading ends the current table.
-        if stripped.endswith(":") and not stripped[:1].isdigit():
-            section = None; continue
-        if section is None:
-            continue
-        match = row.search(line)
-        if not match:
-            continue
-        section.append({
-            "id": int(match.group(2)),
-            "name": match.group(3).strip(),
-            "percent": round(float(match.group(4)) * 100),
-            "muted": "MUTED" in match.group(5),
-            "default": match.group(1) == "*",
-        })
-    return sinks, sources
-
-sinks, sources = parse_devices(wp_status)
-out["audio"] = {"sink": parse_volume(audio), "source": parse_volume(audio_src),
-                "sinkName": sink_name, "sourceName": source_name,
-                "sinks": sinks, "sources": sources}
 
 # -------------------------------------------------------------------- network
 connections = []

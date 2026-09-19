@@ -1,9 +1,13 @@
 // Dynamic Island — a full replacement for the Omarchy bar.
 //
-// The whole surface is one floating island centred at the top of each screen.
-// Closed it is a clock pill and nothing else. Clicked, it grows into a panel
-// carrying everything the stock bar spreads along its width: date, media,
-// agents, services, ports, system meters, network, audio, workspaces, tray.
+// Two floating objects sit at the top of each screen. The island is centred:
+// closed it is a clock pill and nothing else, clicked it grows into a panel
+// carrying everything the stock bar spreads along its width — date, weather,
+// agents, services, ports, system meters, network, workspaces, tray.
+//
+// The media pill is parked at the right edge and owns sound: closed it shows
+// the track and the volume, clicked it grows into a panel with the transport,
+// the seek bar, both volumes, and the output and input device lists.
 //
 // This is a `kind: "bar"` plugin, so the host mounts it *instead of*
 // omarchy.bar and hands it the same injected properties. It owns its own
@@ -57,16 +61,45 @@ Item {
   readonly property int collapsedHeight: 26
   readonly property int expandedWidth: 760
   readonly property int expandedHeight: 440
+
+  // Both closed pills are the same height; the clock is simply given this much
+  // width beyond the time it holds, so the centre reads as the larger object.
+  readonly property int clockExtraWidth: 80
+
+  // The media pill shares the collapsed height so the two closed pills read as
+  // one row, and is narrow enough to open beside the island rather than over
+  // it on any ordinary screen. Opening one closes the other regardless, which
+  // is what keeps them from colliding on a small one.
+  readonly property int mediaExpandedWidth: 420
+  readonly property int mediaExpandedHeight: 480
+
   readonly property int reservedHeight: topMargin + collapsedHeight + Math.max(0, edgeGap - windowGap)
-  readonly property int windowHeight: expandedHeight + topMargin * 2 + 24
+  readonly property int windowHeight: Math.max(expandedHeight, mediaExpandedHeight) + topMargin * 2 + 24
 
   // ---------------------------------------------------------------- state
   // One island is open at a time, across every monitor. `openScreen` names
   // which surface owns it; the others stay collapsed.
   property string openScreen: ""
   function isOpen(name) { return openScreen === String(name) }
-  function toggle(name) { openScreen = isOpen(name) ? "" : String(name) }
-  function close() { openScreen = ""; overlay = "" }
+  function toggle(name) {
+    var target = isOpen(name) ? "" : String(name)
+    openScreen = target
+    // Two panels open at once would overlap on a narrow screen, and there is
+    // nothing to read in the one behind anyway.
+    if (target !== "") mediaScreen = ""
+  }
+  function close() { openScreen = ""; overlay = ""; mediaScreen = "" }
+
+  // The media pill keeps its own open screen for the same reason: one panel
+  // at a time, across every monitor.
+  property string mediaScreen: ""
+  function isMediaOpen(name) { return mediaScreen === String(name) }
+  function toggleMedia(name) {
+    var target = isMediaOpen(name) ? "" : String(name)
+    mediaScreen = target
+    if (target !== "") { openScreen = ""; overlay = "" }
+  }
+  function closeMedia() { mediaScreen = "" }
 
   // A named sheet covering the card grid — currently only "audio". Kept on the
   // bar rather than inside the panel so closing the island clears it too, and
@@ -113,13 +146,22 @@ Item {
     return "'" + String(value).replace(/'/g, "'\\''") + "'"
   }
 
+  // Which screen a keybind means: the focused monitor, falling back to the
+  // first one so an IPC call still lands when Hyprland has not said yet.
+  function focusedScreenName() {
+    if (Hyprland.focusedMonitor) return String(Hyprland.focusedMonitor.name)
+    return Quickshell.screens.length > 0 ? String(Quickshell.screens[0].name) : ""
+  }
+
   // ----------------------------------------------------------------- data
   // Named `hub`, not `data`: `data` is Item's default property and binding a
   // var of that name onto a child silently fights the object hierarchy.
   Data {
     id: dataHub
     pluginDir: root.pluginDir
-    // Poll hard only while someone is looking at it.
+    // Poll hard only while someone is looking at the island. The media pill
+    // deliberately does not count: everything in it is pushed from PipeWire
+    // and MPRIS, so opening it needs no subprocess at all.
     active: root.openScreen !== ""
   }
 
@@ -130,27 +172,30 @@ Item {
   IpcHandler {
     target: "island"
 
-    function toggle(): void {
-      // No screen named means the focused one, which is what a keybind wants.
-      var name = Quickshell.screens.length > 0 ? String(Quickshell.screens[0].name) : ""
-      if (Hyprland.focusedMonitor) name = String(Hyprland.focusedMonitor.name)
-      root.openScreen = root.openScreen === name ? "" : name
-    }
+    function toggle(): void { root.toggle(root.focusedScreenName()) }
     function open(): void {
-      var name = Quickshell.screens.length > 0 ? String(Quickshell.screens[0].name) : ""
-      if (Hyprland.focusedMonitor) name = String(Hyprland.focusedMonitor.name)
-      root.openScreen = name
+      root.openScreen = root.focusedScreenName()
+      root.mediaScreen = ""
     }
-    function close(): void { root.openScreen = "" }
+    function close(): void { root.close() }
 
-    // Opens the panel straight onto the audio device sheet, so picking an
+    // Opens the island straight onto the audio device sheet, so picking an
     // output can be a single keybind rather than open-then-right-click.
     function audio(): void {
-      var name = Quickshell.screens.length > 0 ? String(Quickshell.screens[0].name) : ""
-      if (Hyprland.focusedMonitor) name = String(Hyprland.focusedMonitor.name)
-      root.openScreen = name
+      root.openScreen = root.focusedScreenName()
+      root.mediaScreen = ""
       root.overlay = "audio"
     }
+
+    // The media pill's own three, so the panel that owns playback and volume
+    // is reachable without touching the pointer.
+    function media(): void { root.toggleMedia(root.focusedScreenName()) }
+    function mediaOpen(): void {
+      root.mediaScreen = root.focusedScreenName()
+      root.openScreen = ""
+      root.overlay = ""
+    }
+    function mediaClose(): void { root.closeMedia() }
   }
 
   Variants {

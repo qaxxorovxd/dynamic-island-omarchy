@@ -2,10 +2,10 @@
 #
 # Put the stock Omarchy bar back.
 #
-# Restores ~/.config/omarchy/shell.json from the copy install.sh made, and
-# removes the plugin directory. If that backup is gone, it falls back to just
-# dropping `bar.id`, which is the only key the installer added — so the bar
-# returns either way.
+# Restores ~/.config/omarchy/shell.json from the copy install.sh made, removes
+# the plugin directory, the blur rule and the weather cache. If that backup is
+# gone, it falls back to just dropping `bar.id`, which is the only key the
+# installer added — so the bar returns either way.
 
 set -euo pipefail
 
@@ -59,6 +59,16 @@ if [ -d "$PLUGIN_DIR" ]; then
   say "removed $PLUGIN_DIR"
 else
   say "plugin directory already gone"
+fi
+
+# -------------------------------------------------------------------- cache
+# The weather card writes here at runtime, so install.sh never created it and
+# only this script knows it exists. Nothing else in the plugin leaves state
+# behind on disk.
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy-island"
+if [ -d "$CACHE_DIR" ]; then
+  rm -rf "$CACHE_DIR"
+  say "removed the weather cache"
 fi
 
 # --------------------------------------------------------------------- blur

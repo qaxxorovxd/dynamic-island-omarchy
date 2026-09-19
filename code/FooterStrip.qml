@@ -158,17 +158,11 @@ Item {
     IconButton {
       id: audioButton
       bar: root.bar
-      glyph: {
-        var sink = hub.audio.sink
-        if (!sink || sink.muted) return "\uF026"  // muted
-        if (sink.percent >= 50) return "\uF028"   // high
-        return sink.percent > 0 ? "\uF027"        // low
-                                : "\uF026"
-      }
-      label: hub.audio.sink ? hub.audio.sink.percent + "%" : ""
-      activeState: hub.audio.sink !== null && hub.audio.sink !== undefined && !hub.audio.sink.muted
-      tip: (hub.audio.sinkName || "Audio") + " · right-click for devices"
-      onActivated: bar.run("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle")
+      glyph: hub.sinkGlyph(hub.sinkPercent, hub.sinkMuted)
+      label: hub.defaultSink ? hub.sinkPercent + "%" : ""
+      activeState: !!hub.defaultSink && !hub.sinkMuted
+      tip: (hub.sinkLabel || "Audio") + " · right-click for devices"
+      onActivated: hub.toggleNodeMute(hub.defaultSink)
       onSecondaryActivated: bar.toggleOverlay("audio")
       highlighted: bar.overlay === "audio"
 
@@ -176,9 +170,7 @@ Item {
       // people reach for without looking.
       WheelHandler {
         onWheel: function (event) {
-          var step = event.angleDelta.y > 0 ? "5%+" : "5%-"
-          bar.run("wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ " + step)
-          hub.refresh(false)
+          hub.nudgeNodeVolume(hub.defaultSink, event.angleDelta.y > 0 ? 0.05 : -0.05)
         }
       }
     }
@@ -188,22 +180,19 @@ Item {
     // state has to be visible without opening anything.
     IconButton {
       bar: root.bar
-      glyph: (hub.audio.source && hub.audio.source.muted) ? "\uF131" : "\uF130"
-      glyphColor: (hub.audio.source && hub.audio.source.muted) ? bar.urgent : bar.dim
-      activeState: hub.audio.source !== null && hub.audio.source !== undefined
-                   && !hub.audio.source.muted
-      tip: (hub.audio.sourceName || "Microphone")
-           + ((hub.audio.source && hub.audio.source.muted) ? " · muted" : "")
+      glyph: hub.sourceMuted ? "\uF131" : "\uF130"
+      glyphColor: hub.sourceMuted ? bar.urgent : bar.dim
+      activeState: !!hub.defaultSource && !hub.sourceMuted
+      tip: (hub.sourceLabel || "Microphone")
+           + (hub.sourceMuted ? " · muted" : "")
            + " · right-click for devices"
-      onActivated: bar.run("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle")
+      onActivated: hub.toggleNodeMute(hub.defaultSource)
       onSecondaryActivated: bar.toggleOverlay("audio")
       highlighted: bar.overlay === "audio"
 
       WheelHandler {
         onWheel: function (event) {
-          var step = event.angleDelta.y > 0 ? "5%+" : "5%-"
-          bar.run("wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SOURCE@ " + step)
-          hub.refresh(false)
+          hub.nudgeNodeVolume(hub.defaultSource, event.angleDelta.y > 0 ? 0.05 : -0.05)
         }
       }
     }
